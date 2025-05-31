@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recomendador de Películas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .movie-card {
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+        }
+        .movie-card:hover {
+            transform: scale(1.02);
+        }
+        .rating-stars {
+            color: #ffd700;
+        }
+        .loading {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Loading spinner -->
+    <div class="loading">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+    </div>
+
+    <!-- Alert container -->
+    <div class="alert-container"></div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-film me-2"></i>MovieAgent</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="loadAllMovies()">
+                            <i class="fas fa-list me-1"></i>Todas las Películas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="loadRecommendations()">
+                            <i class="fas fa-star me-1"></i>Recomendaciones
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Formulario para agregar películas -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Agregar Película</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="addMovieForm">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Título</label>
+                                <input type="text" class="form-control" id="title" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="director" class="form-label">Director</label>
+                                <input type="text" class="form-control" id="director" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="genre" class="form-label">Género</label>
+                                <select class="form-select" id="genre" required>
+                                    <option value="Action">Acción</option>
+                                    <option value="Drama">Drama</option>
+                                    <option value="Comedy">Comedia</option>
+                                    <option value="Horror">Terror</option>
+                                    <option value="Sci-Fi">Ciencia Ficción</option>
+                                    <option value="Romance">Romance</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="rating" class="form-label">Calificación</label>
+                                <input type="number" class="form-control" id="rating" min="1" max="5" step="0.1" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-plus-circle me-2"></i>Agregar Película
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección de películas -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-film me-2"></i>
+                            <span id="movieListTitle">Películas Disponibles</span>
+                        </h5>
+                        <div class="btn-group">
+                            <button class="btn btn-light btn-sm" onclick="loadAllMovies()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="moviesList" class="row">
+                            <!-- Las películas se cargarán aquí dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para detalles de película -->
+    <div class="modal fade" id="movieDetailsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Detalles de la Película</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="movieDetails"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Funciones de utilidad
+        function showLoading() {
+            document.querySelector('.loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.querySelector('.loading').style.display = 'none';
+        }
+
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.querySelector('.alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            alertContainer.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        function createMovieCard(movie) {
+            const stars = '★'.repeat(Math.round(parseFloat(movie.rating.value))) + 
+                         '☆'.repeat(5 - Math.round(parseFloat(movie.rating.value)));
+            const movieId = movie.movie.value.split('#')[1].replace('movie_', '');
+            
+            return `
+                <div class="col-md-6">
+                    <div class="card movie-card">
+                        <div class="card-body">
+                            <h5 class="card-title">${movie.title.value}</h5>
+                            <p class="card-text">
+                                <small class="text-muted">Director: ${movie.director.value}</small><br>
+                                <small class="text-muted">Género: ${movie.genre.value}</small><br>
+                                <span class="rating-stars">${stars}</span>
+                            </p>
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary btn-sm" 
+                                        onclick="showMovieDetails('${movieId}')">
+                                    <i class="fas fa-info-circle"></i> Detalles
+                                </button>
+                                <button id="fav-btn-${movieId}" 
+                                        class="btn btn-outline-success btn-sm" 
+                                        onclick="toggleFavorite('${movieId}')">
+                                    <i class="fas fa-heart"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Función para verificar si una película es favorita
+        async function checkFavoriteStatus(movieId) {
+            try {
+                const response = await fetch(`/is_favorite/${movieId}?user_id=1`);
+                const data = await response.json();
+                const btn = document.getElementById(`fav-btn-${movieId}`);
+                
+                if (data.is_favorite) {
+                    btn.classList.remove('btn-outline-success');
+                    btn.classList.add('btn-success');
+                } else {
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-success');
+                }
+            } catch (error) {
+                console.error('Error al verificar estado de favorito:', error);
+            }
+        }
+
+        // Función para alternar favorito
+        async function toggleFavorite(movieId) {
+            showLoading();
+            try {
+                const response = await fetch('/favorite_movie', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: '1',
+                        movie_id: movieId
+                    })
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showAlert('Estado de favorito actualizado');
+                    await checkFavoriteStatus(movieId);
+                    if (document.getElementById('movieListTitle').textContent === 'Recomendaciones') {
+                        loadRecommendations();
+                    }
+                } else {
+                    showAlert(result.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error al actualizar favorito', 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Función para cargar todas las películas
+        async function loadAllMovies() {
+            showLoading();
+            try {
+                const response = await fetch('/get_all_movies');
+                const data = await response.json();
+                
+                const container = document.getElementById('moviesList');
+                document.getElementById('movieListTitle').textContent = 'Películas Disponibles';
+                
+                if (data.status === 'success' && data.movies.length > 0) {
+                    container.innerHTML = data.movies.map(movie => createMovieCard(movie)).join('');
+                    // Verificar estado de favoritos para cada película
+                    for (const movie of data.movies) {
+                        const movieId = movie.movie.value.split('#')[1].replace('movie_', '');
+                        await checkFavoriteStatus(movieId);
+                    }
+                } else {
+                    container.innerHTML = '<div class="col-12"><p class="text-center">No hay películas disponibles</p></div>';
+                }
+            } catch (error) {
+                showAlert('Error al cargar las películas', 'danger');
+                console.error('Error:', error);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Función para cargar recomendaciones
+        async function loadRecommendations() {
+            showLoading();
+            try {
+                const response = await fetch('/get_recommendations?user_id=1');
+                const recommendations = await response.json();
+                
+                const container = document.getElementById('moviesList');
+                document.getElementById('movieListTitle').textContent = 'Recomendaciones';
+                
+                if (recommendations.length > 0) {
+                    container.innerHTML = recommendations.map(movie => createMovieCard(movie)).join('');
+                } else {
+                    container.innerHTML = '<div class="col-12"><p class="text-center">No hay recomendaciones disponibles</p></div>';
+                }
+            } catch (error) {
+                showAlert('Error al cargar recomendaciones', 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Función para mostrar detalles de una película
+        async function showMovieDetails(movieId) {
+            showLoading();
+            try {
+                const response = await fetch(`/movie_details/${movieId}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const detailsContainer = document.getElementById('movieDetails');
+                    const stars = '★'.repeat(Math.round(parseFloat(data.details.rating.value))) + 
+                                '☆'.repeat(5 - Math.round(parseFloat(data.details.rating.value)));
+                    
+                    detailsContainer.innerHTML = `
+                        <h4>${data.details.title.value}</h4>
+                        <p><strong>Director:</strong> ${data.details.director.value}</p>
+                        <p><strong>Género:</strong> ${data.details.genre.value}</p>
+                        <p><strong>Calificación:</strong> <span class="rating-stars">${stars}</span></p>
+                        <p><strong>Opinión del Agente:</strong></p>
+                        <p>${data.opinion}</p>
+                    `;
+                    new bootstrap.Modal(document.getElementById('movieDetailsModal')).show();
+                } else {
+                    showAlert(data.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error al cargar detalles de la película', 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Función para agregar a favoritos
+        async function addToFavorites(movieId) {
+            showLoading();
+            try {
+                const response = await fetch('/favorite_movie', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: '1',
+                        movie_id: movieId
+                    })
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showAlert('Película agregada a favoritos');
+                    loadRecommendations();
+                } else {
+                    showAlert(result.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error al agregar a favoritos', 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Función para agregar una película
+        document.getElementById('addMovieForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showLoading();
+
+            const movieData = {
+                title: document.getElementById('title').value,
+                director: document.getElementById('director').value,
+                genre: document.getElementById('genre').value,
+                rating: parseFloat(document.getElementById('rating').value)
+            };
+
+            try {
+                const response = await fetch('/add_movie', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(movieData)
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showAlert('Película agregada correctamente');
+                    e.target.reset();
+                    // Recargar la lista de películas inmediatamente
+                    await loadAllMovies();
+                } else {
+                    showAlert(result.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error al agregar la película', 'danger');
+                console.error('Error:', error);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Cargar películas al iniciar
+        document.addEventListener('DOMContentLoaded', loadAllMovies);
+    </script>
+</body>
+</html> 
