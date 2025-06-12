@@ -200,3 +200,6 @@ Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](L
 Tu Nombre - [@tutwitter](https://twitter.com/tutwitter) - email@example.com
 
 URL del Proyecto: [https://github.com/tuusuario/movie-recommender](https://github.com/tuusuario/movie-recommender) 
+
+
+python app/load_sample_movies.py
